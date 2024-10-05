@@ -6,12 +6,27 @@ filebeat.inputs:
     json.add_error_key: true            # Add an error key if parsing fails
     json.message_key: message            # Specify the message key for logs
     processors:
+      # Decode the outer JSON structure (message, level_name, etc.)
+      - decode_json_fields:
+          fields: ["message"]        # First, decode the outer JSON (e.g., "level_name", "message", etc.)
+          process_array: false
+          max_depth: 1
+          target: ""                 # Place decoded fields at the root level
+          overwrite_keys: true        # Overwrite keys with new ones if needed
+
+      # Extract the log level from 'level_name' and save it under the ECS 'log.level' field
+      - rename:
+          fields:
+            - from: "level_name"
+              to: "log.level"         # Move 'level_name' to 'log.level' for ECS compatibility
+          ignore_missing: true        # Ignore if 'level_name' does not exist
+
       - add_docker_metadata: ~
+
       - drop_event:
           when:
-            equals:
-              error.message: "Failed to parse docker metadata"
-      
+            starts_with:
+              error.message: "Failed to parse"      
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]
   username: "${ELASTICSEARCH_USERNAME}"
