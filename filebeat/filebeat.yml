@@ -1,0 +1,35 @@
+filebeat.inputs:
+  - type: container
+    paths:
+      - /var/lib/docker/containers/*/*.log
+    # json.keys_under_root: true
+    # json.add_error_key: true
+    # json.message_key: message
+    processors:
+      - add_docker_metadata: ~
+      - drop_event:
+          when:
+            equals:
+              error.message: "Failed to parse docker metadata"  # Condition to drop events with metadata errors
+      
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  username: "${ELASTICSEARCH_USERNAME}"
+  password: "${ELASTICSEARCH_PASSWORD}"
+
+setup.kibana:
+  host: "http://kibana:5601"
+
+
+# filebeat.inputs:
+# - type: container
+#   paths:
+#     - /var/lib/docker/containers/*/*.log
+#   json.keys_under_root: false  # Disable JSON parsing
+#   processors:
+#     - dissect:
+#         tokenizer: "%{log}"
+#         field: "message"
+#         target_prefix: ""
+#     - drop_fields:
+#         fields: ["source", "input", "host", "agent"]  # Drop unnecessary fields
