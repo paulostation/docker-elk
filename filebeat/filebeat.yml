@@ -2,15 +2,15 @@ filebeat.inputs:
   - type: container
     paths:
       - /var/lib/docker/containers/*/*.log
-    # json.keys_under_root: true
-    # json.add_error_key: true
-    # json.message_key: message
+    json.keys_under_root: true         # Parse JSON and place keys at the root
+    json.add_error_key: true            # Add an error key if parsing fails
+    json.message_key: message            # Specify the message key for logs
     processors:
       - add_docker_metadata: ~
       - drop_event:
           when:
             equals:
-              error.message: "Failed to parse docker metadata"  # Condition to drop events with metadata errors
+              error.message: "Failed to parse docker metadata"
       
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]
