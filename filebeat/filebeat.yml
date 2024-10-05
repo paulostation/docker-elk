@@ -1,32 +1,55 @@
 filebeat.inputs:
   - type: container
+    combine_partial: true
     paths:
       - /var/lib/docker/containers/*/*.log
-    json.keys_under_root: true         # Parse JSON and place keys at the root
-    json.add_error_key: true            # Add an error key if parsing fails
-    json.message_key: message            # Specify the message key for logs
+
+    # Add processors to handle conditional log parsing based on labels
     processors:
-      # Decode the outer JSON structure (message, level_name, etc.)
+      - add_docker_metadata: ~
+      - dissect:
+          when:
+            not:
+              has_fields: ["container.labels.filebeat_json_logs"]
+            # equals:
+              # docker.container.labels.filebeat_json_logs: "false"
+          tokenizer: "%{timestamp} - %{log.level} - %{message}"
+          field: "message"
+          target_prefix: ""
+          overwrite_keys: true
       - decode_json_fields:
-          fields: ["message"]        # First, decode the outer JSON (e.g., "level_name", "message", etc.)
+          when:
+            equals:
+              container.labels.filebeat_json_logs: "true"
+
+          fields: ["message", "level"]
           process_array: false
           max_depth: 1
-          target: ""                 # Place decoded fields at the root level
-          overwrite_keys: true        # Overwrite keys with new ones if needed
+          target: ""
+          overwrite_keys: true
+          add_error_key: true
 
-      # Extract the log level from 'level_name' and save it under the ECS 'log.level' field
       - rename:
+          when:
+            equals:
+              container.labels.filebeat_json_logs: "true"
           fields:
             - from: "level_name"
               to: "log.level"         # Move 'level_name' to 'log.level' for ECS compatibility
           ignore_missing: true        # Ignore if 'level_name' does not exist
+          fail_on_error: false
 
-      - add_docker_metadata: ~
-
-      - drop_event:
+      - rename:
           when:
-            starts_with:
-              error.message: "Failed to parse"      
+            equals:
+              container.labels.filebeat_json_logs: "true"
+          fields:
+            - from: "level"
+              to: "log.level"         # Move 'level_name' to 'log.level' for ECS compatibility
+          ignore_missing: true        # Ignore if 'level_name' does not exist
+          fail_on_error: false
+
+
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]
   username: "${ELASTICSEARCH_USERNAME}"

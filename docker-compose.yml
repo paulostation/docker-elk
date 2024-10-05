@@ -111,12 +111,15 @@ services:
     restart: unless-stopped
 
   filebeat:
-    image: docker.elastic.co/beats/filebeat:8.5.3
+    labels:
+      filebeat.json_logs: "true"  # Apply JSON parsing for this container
+    build: 
+      context: filebeat
     user: root
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro  # Docker containers logs
       - /var/run/docker.sock:/var/run/docker.sock:ro               # Docker socket
-      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro  # Custom Filebeat config
+      # - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro  # Custom Filebeat config
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - ELASTICSEARCH_USERNAME=elastic
@@ -126,6 +129,26 @@ services:
     depends_on:
       - elasticsearch
     restart: unless-stopped
+    
+  json-logger:
+    profiles:
+      - test
+    build:
+      context: tests/json-logger
+    environment:
+      - PYTHONUNBUFFERED=1
+    labels:
+      filebeat.json_logs: "true"  # Apply JSON parsing for this container
+    networks:
+      - elk
+
+  text-logger:
+    profiles:
+      - test
+    build:
+      context: tests/plain-text-logger
+    networks:
+      - elk
 
 networks:
   elk:
