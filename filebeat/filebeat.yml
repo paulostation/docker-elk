@@ -1,0 +1,73 @@
+filebeat.inputs:
+  - type: container
+    combine_partial: true
+    paths:
+      - /var/lib/docker/containers/*/*.log
+
+    # Add processors to handle conditional log parsing based on labels
+    processors:
+      - add_docker_metadata: ~
+      - dissect:
+          when:
+            not:
+              has_fields: ["container.labels.filebeat_json_logs"]
+            # equals:
+              # docker.container.labels.filebeat_json_logs: "false"
+          tokenizer: "%{timestamp} - %{log.level} - %{message}"
+          field: "message"
+          target_prefix: ""
+          overwrite_keys: true
+      - decode_json_fields:
+          when:
+            equals:
+              container.labels.filebeat_json_logs: "true"
+
+          fields: ["message", "level"]
+          process_array: false
+          max_depth: 1
+          target: ""
+          overwrite_keys: true
+          add_error_key: true
+
+      - rename:
+          when:
+            equals:
+              container.labels.filebeat_json_logs: "true"
+          fields:
+            - from: "level_name"
+              to: "log.level"         # Move 'level_name' to 'log.level' for ECS compatibility
+          ignore_missing: true        # Ignore if 'level_name' does not exist
+          fail_on_error: false
+
+      - rename:
+          when:
+            equals:
+              container.labels.filebeat_json_logs: "true"
+          fields:
+            - from: "level"
+              to: "log.level"         # Move 'level_name' to 'log.level' for ECS compatibility
+          ignore_missing: true        # Ignore if 'level_name' does not exist
+          fail_on_error: false
+
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  username: "${ELASTICSEARCH_USERNAME}"
+  password: "${ELASTICSEARCH_PASSWORD}"
+
+setup.kibana:
+  host: "http://kibana:5601"
+
+
+# filebeat.inputs:
+# - type: container
+#   paths:
+#     - /var/lib/docker/containers/*/*.log
+#   json.keys_under_root: false  # Disable JSON parsing
+#   processors:
+#     - dissect:
+#         tokenizer: "%{log}"
+#         field: "message"
+#         target_prefix: ""
+#     - drop_fields:
+#         fields: ["source", "input", "host", "agent"]  # Drop unnecessary fields
